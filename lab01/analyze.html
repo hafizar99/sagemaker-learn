@@ -31,8 +31,14 @@
                 if (err) console.log(err); // an error occurred
                 else  {
                     // Grab emtions data from last 30 takes of each person
+                    let addedKey = new Array();
                     for(var i in data.Faces){
-                        const personName = data.Faces[i].ExternalImageId
+                        const personName = data.Faces[i].ExternalImageId;
+                        const indexOf = addedKey.indexOf(personName.toUpperCase());
+                        if(indexOf > -1) {
+                            continue;
+                        }
+                        addedKey.push(personName.toUpperCase());
                         constructDataRow(personName);
                         var params = {
                             ExpressionAttributeValues: {
@@ -61,19 +67,19 @@
         <script>
             function displayLine(data){
                 if(data.Items.length > 0){
-                    const personName = data.Items[0].PersonName.S
+                    const personName = data.Items[0].p_name.S
                     const barChartContainer = $("#" + personName + "-linechart")
                     barChartContainer.contents().remove()
                     barChartContainer.append($("<canvas></canvas>").attr({id: personName + "-linecanvas"}));
                     const ctx = document.getElementById(personName + '-linecanvas').getContext('2d');
                     const xLabels = data.Items.map(function(d){
-                        const ds = new Date(parseInt(d.TS.N)).toUTCString()
+                        const ds = new Date(parseInt(d.ts.N)).toUTCString()
                         const da = ds.split(" ");
                         const x = da[1] + "/" + da[2] + "/" + da[3] + "-" + da[4];
                         return x
                     })
                     var newData = data.Items.map(function(d){
-                        const ds = new Date(parseInt(d.TS.N)).toUTCString()
+                        const ds = new Date(parseInt(d.ts.N)).toUTCString()
                         const da = ds.split(" ");
                         const x = da[1] + "/" + da[2] + "/" + da[3] + "-" + da[4];
                         const isSmile = typeof d.smile != "undefined" && d.smile.BOOL

@@ -23,6 +23,10 @@
         <div id="container">
             <video autoplay="true" id="videoElement"></video>
             <p id="identified"></p>
+            <div>
+                <button id="register-button" class="btn btn-success">Register Another</button>
+                <button id="analyze-button" class="btn btn-success">Analyze Your Expression</button>
+            </div>
             <canvas id="canvas" width=320 height=240 style="display:none"></canvas>
         </div>
         <script src="https://sdk.amazonaws.com/js/aws-sdk-2.457.0.min.js"></script>
@@ -144,6 +148,18 @@
                 });
             };
 
+        </script>
+        <script>
+            // Initialize listener for face register button
+            $('#register-button').on('click', function () {
+                window.location.href = 'register.html';
+                return false;
+            });
+
+            $('#analyze-button').on('click', function () {
+                window.location.href = 'analyze.html';
+                return false;
+            })
         </script>
     </body>
 </html>
