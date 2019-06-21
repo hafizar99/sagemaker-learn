@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <script src="https://code.jquery.com/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css" integrity="sha384-HSMxcRTRxnN+Bdg0JdbxYKrThecOKuH5zCYotlSAcp1+c8xmyTe9GYg1l9a69psu" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap-theme.min.css" integrity="sha384-6pzBo3FDv/PJ8r2KRkGHifhEocL+1X2rVCTTkUfGk7/0pbek5mMa1upzvWbrUbOZ" crossorigin="anonymous">
+        <script src="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js" integrity="sha384-aJ21OjlMXNL5UyIl/XNwTMqvzeRMZH2w8c5cRVpzpU8Y5bApTppSuUkhZXN0VxHd" crossorigin="anonymous"></script>
+        <style>
+            #container {
+                margin: 0px auto;
+                width: 500px;
+                height: 375px;
+                border: 10px #333 solid;
+            }
+            #videoElement {
+                width: 500px;
+                height: 375px;
+                background-color: #666;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="container">
+            <video autoplay="true" id="videoElement"></video>
+            <p id="identified"></p>
+            <canvas id="canvas" width=320 height=240 style="display:none"></canvas>
+        </div>
+        <script src="https://sdk.amazonaws.com/js/aws-sdk-2.457.0.min.js"></script>
+        <script>
+            // Initialize the Amazon Cognito credentials provider
+            
+            // ----------- STEP 3.3 HERE -----------
+            AWS.config.region = 'us-east-1'; // Region
+            AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+                IdentityPoolId: 'us-east-1:83026c71-3922-449e-b55e-1393d4574540',
+            });
+
+            // Initialize Amazon Rekognition object
+            var rekognition = new AWS.Rekognition();
+            // Prepare HTML 5 video and canvas object
+            var video = document.querySelector("#videoElement");
+            const canvas = document.getElementById('canvas');
+            const context = canvas.getContext('2d');
+            // Initiate webcam playback
+            if (navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ video: true, facingMode: "environment" })
+                    .then(function (stream) {
+                        video.srcObject = stream;
+                    })
+                    .catch(function (err0r) {
+                        console.log("Something went wrong!");
+                    });
+            }
+            // Search face using Rekognition every second
+            var interval = setInterval(function(){
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                var imageBytes = processImage()
+                
+                // ----------- STEP 4.4 HERE -----------
+                var params = {
+                    CollectionId: "mycollection", /* required */
+                    Image: { /* required */
+                        Bytes: imageBytes
+                    },
+                    FaceMatchThreshold: 0.7,
+                    MaxFaces: 1
+                    };
+                    rekognition.searchFacesByImage(params, function(err, data) {
+                    if (err) {
+                        updateGreetings(null)
+                        console.log(err);
+                    } else {
+                        if(data.FaceMatches.length != 0){
+                            var personName = data.FaceMatches[0].Face.ExternalImageId;
+                            updateGreetings(personName);
+                            // ----------- STEP 3.4 HERE -----------
+                            detectMood(personName, imageBytes)
+                        }else{
+                            updateGreetings(null)
+                        }
+                    }
+                });
+
+            },1000)
+        </script>
+        <script>
+            // Initialize function to process snapshotted image to bytes
+            var processImage = function(){
+                var imageDataString = canvas.toDataURL("image/jpeg");
+                imageDataString = atob(imageDataString.split("data:image/jpeg;base64,")[1]);  // ArrayBuffer
+                var length = imageDataString.length;
+                var imageBytes = new ArrayBuffer(length);
+                var ua = new Uint8Array(imageBytes);
+                for (var i = 0; i < length; i++) {
+                    ua[i] = imageDataString.charCodeAt(i);
+                }
+                return imageBytes
+            }
+            // Initialize function to update the identification result text
+            var updateGreetings = function(personName){
+                var p = document.getElementById("identified")
+                p.innerHTML = '';
+                if(personName != null){
+                    p.appendChild(document.createTextNode("Welcome, " + personName))
+                }
+            }
+            // Initialize function to detect the mood of the person using Rekognition and log to DynamodB table
+            
+            // ----------- STEP 4.5 HERE ----------- 
+            var detectMood = function(personName, faceImage){
+                var params = {
+                    Image: {
+                        Bytes: faceImage
+                    },
+                    Attributes: ["ALL"]
+                };
+                rekognition.detectFaces(params, function(err, data) {
+                    if (err) {
+                        console.log(err);
+                    } else {
+                        if(data.FaceDetails.length > 0){
+                            // Initialize DynamoDB object and table name
+                            var tableName = "People"
+                            var dynamodb = new AWS.DynamoDB();
+                            // Collect emotions data
+                            var faceData = data.FaceDetails[0];
+                            var params = { TableName: tableName, Item: {"p_name": { S: personName }, "ts": { N: Date.now().toString()} }}
+                            for(var i in faceData.Emotions){
+                                if(faceData.Emotions[i].Type == "HAPPY" && faceData.Emotions[i].Confidence > 70) params.Item.happy = {BOOL: true}
+                                if(faceData.Emotions[i].Type == "SAD" && faceData.Emotions[i].Confidence > 7) params.Item.sad = {BOOL: true}
+                                if(faceData.Emotions[i].Type == "ANGRY" && faceData.Emotions[i].Confidence > 10) params.Item.angry = {BOOL: true}
+                                if(faceData.Emotions[i].Type == "CONFUSED" && faceData.Emotions[i].Confidence > 50) params.Item.calm = {BOOL: true}
+                                if(faceData.Emotions[i].Type == "CALM" && faceData.Emotions[i].Confidence > 70) params.Item.calm = {BOOL: true}
+                            }
+                            if(faceData.Smile.Value && faceData.Smile.Confidence > 70)  params.Item.smile = {BOOL: true}
+                            // Log the data to DynamoDB table
+                            dynamodb.putItem(params, function(err, data) {
+                                if (err) {
+                                    console.log(err);
+                                } 
+                            });
+                        }
+                    }
+                });
+            };
+
+        </script>
+    </body>
+</html>
