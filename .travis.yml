@@ -1,9 +1,11 @@
 language: generic
 deploy:
   provider: s3
-  access_key_id: AKIATGKGNELIMPH2LNMX
+  on:
+    branch: master
+  access_key_id: $AWS_ACCESS_KEY
   secret_access_key:
-    secure: NjefEU0jVD3AdkSWY6RYGUZdslKFuS9feCzBOYErFcTO9PxKQV6FgXtkXTkVeuDZOLc/RVyzAOXmOon19DajARYxaAa75gBWuEGsEAB/zxmlRJ+wnfglJExryeUiT0/2FQm4RG/NDiBIylQDmGPflKalvmKVYmkrz/FSP0QT8zgQk5lK0X9MTan1O8ZwIvijGKsKkeTi1uhRmCLB2dQA+RQhgxsouNL/LnUag8xcRshxx5n8sq5C3AnIVG27/nt1bkO/hf5vpSfIvn0Rlu1fCr58r3RN0nuZxegjfXv3/oTZk3fhUaqQqTEip4WHXVk+0dGdpF2C5n4jeLVhrGElD532hsps3hDTRavCYyx0BD2yPYwo4H7ou1kZ6ooA1pTl0uus200iNZjK7gdA7k+uc2huvRquO+GOv4xqrqhqR5qQWOBQXNfqlr85v6sykzVhFGL0gys1mr4oDl1983IdfAv1OQakevHgS411ZvJiEF/htLpj2X7B6FUyE0dL6zbKYvA26AL2iK87V2YSFu0dHH9RWeKlbT0ipLv180wMOq0lLqwpo/7O+28xVYOEx9PtNc5cBzSzkpnkK/RbcN5jvIdI3cYU8HANU0QQkpcoQ6dTxacW/V1qI/flajETtYX8JvL2b0TdA/daB3dtcKYuuR5YlhIERnUc3e4kPN4xc8U=
+    secure: "$AWS_SECRET_KEY"
   bucket: my-ml-workshop
   acl: public_read
   on:
