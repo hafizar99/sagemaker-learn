@@ -7,5 +7,6 @@ deploy:
   secret_access_key:
     secure: "$AWS_SECRET_KEY"
   bucket: my-ml-workshop
+  region: eu-east-1
   on:
     repo: hafizar99/sagemaker-learn
