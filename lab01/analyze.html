@@ -10,6 +10,10 @@
     </head>
     <body>
         <div id="container">
+            <div style="margin: 25px;">
+                <button id="register-button" class="btn btn-success">Register Another</button>
+                <button id="identify-button" class="btn btn-success">Identify</button>
+            </div>
         </div>
         <script src="https://sdk.amazonaws.com/js/aws-sdk-2.457.0.min.js"></script>
         <script>
@@ -198,6 +202,18 @@
                 // Append time series column
                 row.append($("<div></div>").addClass("col-md-7").css("padding-top","80px").append(document.createTextNode('No Data')).attr({id: personName + "-linechart"}))
             }
+        </script>
+        <script>
+            // Initialize listener for face register button
+            $('#register-button').on('click', function () {
+                window.location.href = 'register.html';
+                return false;
+            });
+
+            $('#identify-button').on('click', function () {
+                window.location.href = 'identify.html';
+                return false;
+            })
         </script>
     </body>
 </html>
