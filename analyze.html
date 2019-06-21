@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <script src="https://code.jquery.com/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css" integrity="sha384-HSMxcRTRxnN+Bdg0JdbxYKrThecOKuH5zCYotlSAcp1+c8xmyTe9GYg1l9a69psu" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap-theme.min.css" integrity="sha384-6pzBo3FDv/PJ8r2KRkGHifhEocL+1X2rVCTTkUfGk7/0pbek5mMa1upzvWbrUbOZ" crossorigin="anonymous">
+        <script src="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js" integrity="sha384-aJ21OjlMXNL5UyIl/XNwTMqvzeRMZH2w8c5cRVpzpU8Y5bApTppSuUkhZXN0VxHd" crossorigin="anonymous"></script>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.min.css">
+        <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.bundle.min.js"></script>
+    </head>
+    <body>
+        <div id="container">
+        </div>
+        <script src="https://sdk.amazonaws.com/js/aws-sdk-2.457.0.min.js"></script>
+        <script>
+            // Initialize the Amazon Cognito credentials provider
+            AWS.config.region = 'us-east-1'; // Region
+            AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+                IdentityPoolId: 'us-east-1:83026c71-3922-449e-b55e-1393d4574540',
+            });
+            // Initialize DynamoDB and Rekognition client object and define table name
+            var dynamodb = new AWS.DynamoDB();
+            var rekognition =  new AWS.Rekognition();
+            var tableName = "People"
+            // List all persons whose face already indexed
+            var params = {
+                CollectionId: "mycollection", /* required */
+                MaxResults: 100,
+            };
+            rekognition.listFaces(params, function(err, data) {
+                if (err) console.log(err); // an error occurred
+                else  {
+                    // Grab emtions data from last 30 takes of each person
+                    for(var i in data.Faces){
+                        const personName = data.Faces[i].ExternalImageId
+                        constructDataRow(personName);
+                        var params = {
+                            ExpressionAttributeValues: {
+                            ":v1": {
+                                S: personName
+                                }
+                            }, 
+                            KeyConditionExpression: "p_name = :v1", 
+                            TableName: tableName,
+                            Limit: 100
+                        };  
+                        dynamodb.query(params, function(err, data) {
+                            if (err) console.log(err); // an error occurred
+                            else  {
+                                try{
+                                    displayBar(data);
+                                    displayLine(data);
+                                }
+                                catch(e){console.log(e)}
+                            }           
+                        });
+                    }
+                }
+            });
+        </script>
+        <script>
+            function displayLine(data){
+                if(data.Items.length > 0){
+                    const personName = data.Items[0].PersonName.S
+                    const barChartContainer = $("#" + personName + "-linechart")
+                    barChartContainer.contents().remove()
+                    barChartContainer.append($("<canvas></canvas>").attr({id: personName + "-linecanvas"}));
+                    const ctx = document.getElementById(personName + '-linecanvas').getContext('2d');
+                    const xLabels = data.Items.map(function(d){
+                        const ds = new Date(parseInt(d.TS.N)).toUTCString()
+                        const da = ds.split(" ");
+                        const x = da[1] + "/" + da[2] + "/" + da[3] + "-" + da[4];
+                        return x
+                    })
+                    var newData = data.Items.map(function(d){
+                        const ds = new Date(parseInt(d.TS.N)).toUTCString()
+                        const da = ds.split(" ");
+                        const x = da[1] + "/" + da[2] + "/" + da[3] + "-" + da[4];
+                        const isSmile = typeof d.smile != "undefined" && d.smile.BOOL
+                        const isHappy = typeof d.happy != "undefined" && d.happy.BOOL
+                        const isCalm = typeof d.calm != "undefined" && d.calm.BOOL
+                        const isConfused = typeof d.confused != "undefined" && d.confused.BOOL
+                        const isSad = typeof d.sad != "undefined" && d.sad.BOOL
+                        const isAngry = typeof d.angry != "undefined" && d.angry.BOOL
+                        if(isSmile || isHappy) return {y: "Happy"}
+                        if(isCalm) return {y: "Calm/Neutral"}
+                        if(isConfused || isSad || isAngry) return { y: "Confused/Angry/Sad"}
+                        return {y: "Unknown"}
+                    });
+                    const borderColor = 'rgba(' + Math.random()*255 +', ' + Math.random()*255 + ', '+ Math.random()*255 +', 0.8)'
+                    var lineChartData = {
+                        datasets: [{
+                            label: personName,
+                            fill: false,
+                            backgroundColor: borderColor,
+                            pointHoverBackgroundColor: 'rgba(' + Math.random()*255 +', ' + Math.random()*255 + ', '+ Math.random()*255 +', 0.8)',
+                            pointBorderColor: borderColor,
+                            showLine: false,
+                            borderWidth: 3,
+                            data: newData
+                        }]
+                    };
+                    const myBarChart = new Chart(ctx, {
+                        type: 'line',
+                        data: lineChartData,
+                        options: {
+                            responsive: true,
+                            legend: {
+                                position: 'right',
+                            },
+                            title: {
+                                display: true,
+                                text: 'Time Series'
+                            },
+                            scales: {
+                                xAxes: [{
+                                    type: 'category',
+                                    position: 'bottom',
+                                    labels: xLabels
+                                }],
+                                yAxes: [{
+                                    type: 'category',
+                                    position: 'left',
+                                    labels: ["Happy", "Calm/Neutral", "Confused/Angry/Sad"]
+                                }]
+                            }
+                        }
+                    });
+                }
+            }
+            function displayBar(data){
+                if(data.Items.length > 0){
+                    const personName = data.Items[0].p_name.S
+                    const barChartContainer = $("#" + personName + "-barchart")
+                    barChartContainer.contents().remove()
+                    barChartContainer.append($("<canvas></canvas>").attr({id: personName + "-barcanvas"}));
+                    const ctx = document.getElementById(personName + '-barcanvas').getContext('2d');
+                    var barChartData = {
+                        labels: ['Happy', 'Calm/Neutral', 'Confused/Sad/Angry'],
+                        datasets: [{
+                            label: personName,
+                            backgroundColor: 'rgba(' + Math.random()*255 +', ' + Math.random()*255 + ', '+ Math.random()*255 +', 0.8)',
+                            hoverBackgroundColor: 'rgba(' + Math.random()*255 +', ' + Math.random()*255 + ', '+ Math.random()*255 +', 0.8)',
+                            borderColor: 'rgba(0, 0, 0, 0.1)',
+                            borderWidth: 1,
+                            data: aggregateMood(data)
+                        }]
+                    };
+                    const myBarChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: barChartData,
+                        options: {
+                            responsive: true,
+                            legend: {
+                                position: 'right',
+                            },
+                            title: {
+                                display: true,
+                                text: 'Mood Today'
+                            }
+                        }
+                    });
+                }
+            }
+            function aggregateMood(data){
+                var output = [0,0,0]
+                for(var i in data.Items){
+                    const d = data.Items[i];
+                    const filter = Date.now() - data.Items[i].ts.N <= 86400000
+                    if(filter){ // If data still within 1 day
+                        const isSmile = typeof d.smile != "undefined" && d.smile.BOOL
+                        const isHappy = typeof d.happy != "undefined" && d.happy.BOOL
+                        const isCalm = typeof d.calm != "undefined" && d.calm.BOOL
+                        const isConfused = typeof d.confused != "undefined" && d.confused.BOOL
+                        const isSad = typeof d.sad != "undefined" && d.sad.BOOL
+                        const isAngry = typeof d.angry != "undefined" && d.angry.BOOL
+                        if(isSmile || isHappy) output[0] += 1
+                        if(isCalm) output[1] += 1
+                        if(isConfused || isSad || isAngry) output[2] += 1
+                    }
+                }
+                return output
+            }
+            function constructDataRow(personName){
+                const row = $("<div></div").addClass("row")
+                // Attach to container
+                $("#container").append(row)
+                // Append person name column
+                row.append($("<div style='padding-left: 50px;padding-top:80px;'></div>").addClass("col-md-1").append(document.createTextNode(personName)))
+                // Append bar chart column
+                row.append($("<div></div>").addClass("col-md-4").css("padding-top","80px").append(document.createTextNode('No Data')).attr({id: personName + "-barchart"}))
+                // Append time series column
+                row.append($("<div></div>").addClass("col-md-7").css("padding-top","80px").append(document.createTextNode('No Data')).attr({id: personName + "-linechart"}))
+            }
+        </script>
+    </body>
+</html>
