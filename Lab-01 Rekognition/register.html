@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <script src="https://code.jquery.com/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css" integrity="sha384-HSMxcRTRxnN+Bdg0JdbxYKrThecOKuH5zCYotlSAcp1+c8xmyTe9GYg1l9a69psu" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap-theme.min.css" integrity="sha384-6pzBo3FDv/PJ8r2KRkGHifhEocL+1X2rVCTTkUfGk7/0pbek5mMa1upzvWbrUbOZ" crossorigin="anonymous">
+        <script src="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js" integrity="sha384-aJ21OjlMXNL5UyIl/XNwTMqvzeRMZH2w8c5cRVpzpU8Y5bApTppSuUkhZXN0VxHd" crossorigin="anonymous"></script>
+        <style>
+            #video-element {
+                width: 500px;
+                height: 375px;
+                background-color: #666;
+            }
+            #snapshot-button {
+                margin-top: 180px;
+            }
+            #registration-box {
+                margin-top: 50px;
+            }
+            .hidden{
+                display: none;
+            }
+        </style>
+    </head>
+    <body>
+        <div>
+            <div id="container" class="row">
+                <div class="col-md-5">
+                    <video autoplay="true" id="video-element"></video>
+                </div>
+                <div class="col-md-1">
+                    <button id="snapshot-button" class="btn btn-primary">Snapshot!</button>
+                </div>
+                <div id="registration-box" class="col-md-3 hidden">
+                    <canvas id="canvas" width=240 height=180></canvas>
+                    <p>Register as:</p>
+                    <div class="form-group">
+                        <label for="name">Name</label>
+                        <input type="name" class="form-control" id="name" placeholder="Name">
+                        <button id="register-button" class="btn btn-success">Register</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script  src="https://sdk.amazonaws.com/js/aws-sdk-2.457.0.min.js"></script>
+        <script>
+            // Initialize the Amazon Cognito credentials provider
+
+            // ----------- STEP 2.4 HERE -----------
+            // Initialize the Amazon Cognito credentials provider
+            AWS.config.region = 'us-east-1'; // Region
+            AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+                IdentityPoolId: 'us-east-1:83026c71-3922-449e-b55e-1393d4574540',
+            });
+
+            // Initialize Amazon Rekognition object and define face collection Id
+            
+            // ----------- STEP 2.5 HERE -----------
+            var rekognition = new AWS.Rekognition();
+            var faceCollectionId = "mycollection";
+
+            // Prepare HTML 5 video and canvas object
+            var video = document.querySelector("#video-element");
+            const canvas = document.getElementById('canvas');
+            const context = canvas.getContext('2d');
+            //Initiate webcam playback
+            if (navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ video: true, facingMode: "user" })
+                    .then(function (stream) {
+                        video.srcObject = stream;
+                    })
+                    .catch(function (err0r) {
+                        console.log("Something went wrong!");
+                    });
+            }
+            // Initialize listener for snapshot action
+            $('#snapshot-button').on('click', function () {
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                $('#registration-box').removeClass("hidden")
+            })
+            // Initialize listener for face register button
+            $('#register-button').on('click', function () {
+                $btn = $(this)
+                if ($('#name').val() == "") alert("Please fill in the name")
+                $btn.button("loading")
+                // Process image
+                var imageBytes = processImage();
+                // Define index new face function
+                
+                // ----------- STEP 2.6 HERE -----------
+                var indexFace = function (collectionId){
+                    var params = {
+                        CollectionId: collectionId, 
+                        Image: { 
+                            Bytes: imageBytes
+                        },
+                        DetectionAttributes: ["ALL"],
+                        ExternalImageId: $('#name').val(),
+                        MaxFaces: 1,
+                        QualityFilter: "NONE"
+                    };
+                    rekognition.indexFaces(params, function(err, data) {
+                        if (err) console.log(err, err.stack); // an error occurred
+                        else  {
+                            alert("Successful..")
+                            $btn.button("reset")
+                            $("#registration-box").addClass("hidden");
+                        }
+                    });
+                }
+
+                // Use/create new collection and index new face
+                fetchCollection(indexFace)
+            })
+        </script>
+        <script>
+            // Define function to check whether collection exists, or create new           
+            var fetchCollection = function(indexFaceFunction){
+                var params = {};
+                rekognition.listCollections(params, function(err, data) {
+                    var createNewCollection = function(){
+                        var params = {
+                            CollectionId: faceCollectionId
+                        };
+                        rekognition.createCollection(params, function(err, data) {
+                            if (err) console.log(err, err.stack); // an error occurred
+                            else {
+                                indexFaceFunction(faceCollectionId)
+                            }
+                        });
+                    }
+                    if (err) console.log(err, err.stack); // an error occurred
+                    else {
+                        if(data.CollectionIds.length == 0){
+                            createNewCollection()
+                        }else{
+                            if(data.CollectionIds.includes(faceCollectionId)){
+                                indexFaceFunction(faceCollectionId)
+                            }else{
+                                createNewCollection()
+                            }
+                        }
+                        
+                    }
+                });
+            }
+            // Initialize function to process snapshotted image to bytes
+            var processImage = function(){
+                var imageDataString = canvas.toDataURL("image/jpeg");
+                imageDataString = atob(imageDataString.split("data:image/jpeg;base64,")[1]);  // ArrayBuffer
+                var length = imageDataString.length;
+                var imageBytes = new ArrayBuffer(length);
+                var ua = new Uint8Array(imageBytes);
+                for (var i = 0; i < length; i++) {
+                    ua[i] = imageDataString.charCodeAt(i);
+                }
+                return imageBytes
+            }
+        </script>
+    </body>
+</html>
